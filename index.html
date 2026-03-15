@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VaultDrive</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #07080d;
+      --panel:    #0e0f17;
+      --card:     #13141f;
+      --border:   #1e2030;
+      --border2:  #2a2d45;
+      --accent:   #5b6af7;
+      --accent-g: #7c3aed;
+      --danger:   #f43f5e;
+      --green:    #22c55e;
+      --text:     #e2e4f0;
+      --muted:    #5a5d78;
+      --muted2:   #3a3d55;
+    }
+    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); }
+    .mono { font-family: 'IBM Plex Mono', monospace; }
+
+    /* PAGE TRANSITIONS */
+    .page { position: fixed; inset: 0; transition: opacity 0.35s ease, transform 0.35s ease; overflow-y: auto; }
+    .page-hidden { opacity: 0; pointer-events: none; transform: scale(0.98); }
+
+    /* ── LOGIN PAGE ─────────────────────────── */
+    #page-auth {
+      display: flex;
+      background:
+        radial-gradient(ellipse 80% 60% at 10% -10%, rgba(91,106,247,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 90% 100%, rgba(124,58,237,0.14) 0%, transparent 60%),
+        var(--bg);
+    }
+
+    .auth-left {
+      flex: 1; display: none; flex-direction: column; justify-content: center;
+      padding: 64px; border-right: 1px solid var(--border);
+      position: relative; overflow: hidden;
+    }
+    @media(min-width:900px){ .auth-left { display: flex; } }
+
+    .auth-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px; opacity: 0.4;
+    }
+    .auth-glow {
+      position: absolute; width: 400px; height: 400px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(91,106,247,0.15) 0%, transparent 70%);
+      top: -100px; left: -100px;
+    }
+    .logo-big {
+      position: relative; width: 60px; height: 60px; border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-g));
+      display: flex; align-items: center; justify-content: center; margin-bottom: 32px;
+      box-shadow: 0 8px 32px rgba(91,106,247,0.35);
+    }
+    .tagline { font-size: 36px; font-weight: 700; line-height: 1.2; color: white; margin-bottom: 16px; }
+    .tagline span { background: linear-gradient(90deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .sub { font-size: 15px; color: var(--muted); line-height: 1.6; max-width: 360px; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--border); font-size: 13px; color: var(--muted); margin-top: 8px; margin-right: 8px; }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+    .auth-right {
+      width: 100%; max-width: 480px;
+      display: flex; flex-direction: column; justify-content: center;
+      padding: 32px 40px; margin: 0 auto;
+    }
+    @media(min-width:900px){ .auth-right { border-left: 1px solid var(--border); } }
+
+    .form-card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 20px; padding: 36px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    }
+    .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; display: block; }
+    .iw { position: relative; }
+    .ic { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+    .field {
+      width: 100%; background: var(--card); border: 1.5px solid var(--border);
+      border-radius: 12px; color: var(--text); font-size: 14px;
+      padding: 13px 14px 13px 42px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s; font-family: 'Inter', sans-serif;
+    }
+    .field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,106,247,0.15); }
+    .field::placeholder { color: var(--muted); }
+
+    .btn-p {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-g));
+      border: none; border-radius: 12px; color: white;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s, box-shadow 0.2s;
+      letter-spacing: 0.02em; box-shadow: 0 4px 20px rgba(91,106,247,0.3);
+    }
+    .btn-p:hover { opacity: 0.92; box-shadow: 0 6px 28px rgba(91,106,247,0.45); }
+    .btn-p:active { transform: scale(0.99); }
+    .btn-p:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .tab-row { display: flex; gap: 4px; background: var(--card); border-radius: 12px; padding: 4px; margin-bottom: 28px; }
+    .tab { flex: 1; padding: 9px; border-radius: 9px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--muted); transition: all 0.2s; }
+    .tab.on { background: var(--panel); color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .hr { height: 1px; background: var(--border); margin: 24px 0; }
+
+    /* ── DASHBOARD ──────────────────────────── */
+    #page-dash {
+      display: flex; flex-direction: column; background: var(--bg); overflow: hidden;
+    }
+    .topbar {
+      height: 58px; flex-shrink: 0; background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 24px; gap: 12px; z-index: 10;
+    }
+    .logo-sm {
+      width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), var(--accent-g));
+      display: flex; align-items: center; justify-content: center;
+    }
+    .btn-logout {
+      display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px;
+      font-size: 12px; font-weight: 600; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s;
+    }
+    .btn-logout:hover { border-color: var(--danger); color: var(--danger); background: rgba(244,63,94,0.06); }
+
+    .dash-body { flex: 1; overflow-y: auto; }
+    .sec { padding: 24px 28px; }
+    .sec + .sec { border-top: 1px solid var(--border); }
+    .sec-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--muted); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .sec-title::after { content:''; flex:1; height:1px; background: var(--border); }
+
+    .stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; min-width: 120px; }
+    .stat-v { font-size: 22px; font-weight: 700; color: white; }
+    .stat-l { font-size: 11px; color: var(--muted); font-weight: 500; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+    .drop-zone {
+      border: 2px dashed var(--border2); border-radius: 16px; background: var(--card);
+      padding: 36px 24px; text-align: center; cursor: pointer; transition: all 0.2s; display: block;
+    }
+    .drop-zone:hover, .drop-zone.over { border-color: var(--accent); background: rgba(91,106,247,0.04); }
+    .drop-zone input { display: none; }
+    .dz-icon { width: 52px; height: 52px; border-radius: 14px; background: rgba(91,106,247,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
+
+    .prog-bar-bg { height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; margin-top: 10px; }
+    .prog-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #a78bfa); border-radius: 999px; width: 0%; transition: width 0.25s ease; }
+
+    .btn-up {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 24px; border-radius: 10px; background: var(--accent);
+      border: none; color: white; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; margin-top: 16px;
+    }
+    .btn-up:hover { opacity: 0.88; }
+    .btn-up:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .frow { display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; transition: border-color 0.15s; }
+    .frow:hover { border-color: var(--border2); }
+    .ficon { width: 38px; height: 38px; border-radius: 10px; background: rgba(91,106,247,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .fext { font-size: 9px; font-weight: 700; color: var(--accent); font-family: 'IBM Plex Mono', monospace; }
+    .fname { font-size: 13px; font-weight: 500; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fmeta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .factions { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+    .btn-dl, .btn-del { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+    .btn-dl { background: rgba(91,106,247,0.12); color: #818cf8; }
+    .btn-dl:hover { background: rgba(91,106,247,0.22); }
+    .btn-del { background: rgba(244,63,94,0.08); color: #fb7185; }
+    .btn-del:hover { background: rgba(244,63,94,0.18); }
+
+    .empty-box { text-align: center; padding: 48px 0; }
+    .empty-ico { width: 56px; height: 56px; border-radius: 14px; background: var(--card); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
+
+    #toast {
+      position: fixed; bottom: 20px; right: 20px; padding: 11px 18px; border-radius: 10px;
+      font-size: 13px; font-weight: 500; z-index: 9999; opacity: 0;
+      transition: opacity 0.25s, transform 0.25s; transform: translateY(8px);
+      pointer-events: none; max-width: 300px; line-height: 1.4;
+    }
+    #toast.on { opacity: 1; transform: translateY(0); }
+    #toast.s { background: #0d2010; border: 1px solid #1a4d20; color: #4ade80; }
+    #toast.e { background: #200d10; border: 1px solid #4d1a1a; color: #f87171; }
+    #toast.i { background: #0d1020; border: 1px solid #1a1a4d; color: #818cf8; }
+
+    .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); border-top-color: white; animation: sp .65s linear infinite; display: inline-block; }
+    @keyframes sp { to { transform: rotate(360deg); } }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  PAGE: AUTH (default visible)          -->
+<!-- ══════════════════════════════════════ -->
+<div id="page-auth" class="page">
+
+  <!-- Left decoration -->
+  <div class="auth-left">
+    <div class="auth-grid"></div>
+    <div class="auth-glow"></div>
+    <div style="position:relative">
+      <div class="logo-big">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+          <path d="M3 15C3 15 3 9 12 9C21 9 21 15 21 15" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <path d="M12 9V3M12 3L9 6M12 3L15 6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="12" cy="18" r="3" fill="white"/>
+        </svg>
+      </div>
+      <div class="tagline">Simpan file kamu<br/>dengan <span>aman & mudah</span></div>
+      <div class="sub">Cloud storage pribadi yang terenkripsi. Upload, akses, dan kelola file dari mana saja.</div>
+      <div style="margin-top:28px">
+        <div class="pill"><span class="pill-dot"></span>Enkripsi end-to-end</div>
+        <div class="pill"><span class="pill-dot"></span>Akses kapanpun</div>
+        <div class="pill"><span class="pill-dot"></span>Berbasis Supabase</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right form -->
+  <div class="auth-right">
+    <div class="form-card">
+
+      <!-- Brand -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px">
+        <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-g));display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M3 15C3 15 3 9 12 9C21 9 21 15 21 15" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <path d="M12 9V3M12 3L9 6M12 3L15 6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="12" cy="18" r="3" fill="white"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:white">VaultDrive</div>
+          <div class="mono" style="font-size:10px;color:var(--muted)">cloud storage pribadi</div>
+        </div>
+      </div>
+
+      <div class="tab-row">
+        <button class="tab on" id="tab-l" onclick="switchTab('l')">Masuk</button>
+        <button class="tab" id="tab-r" onclick="switchTab('r')">Daftar</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="form-l">
+        <div style="margin-bottom:16px">
+          <label class="lbl">Email</label>
+          <div class="iw">
+            <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+            <input type="email" id="l-em" class="field" placeholder="kamu@email.com"/>
+          </div>
+        </div>
+        <div style="margin-bottom:24px">
+          <label class="lbl">Password</label>
+          <div class="iw">
+            <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <input type="password" id="l-pw" class="field" placeholder="••••••••"/>
+          </div>
+        </div>
+        <button class="btn-p" id="btn-l" onclick="doLogin()"><span id="l-txt">Masuk ke Akun →</span></button>
+      </div>
+
+      <!-- REGISTER -->
+      <div id="form-r" style="display:none">
+        <div style="margin-bottom:16px">
+          <label class="lbl">Email</label>
+          <div class="iw">
+            <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+            <input type="email" id="r-em" class="field" placeholder="kamu@email.com"/>
+          </div>
+        </div>
+        <div style="margin-bottom:16px">
+          <label class="lbl">Password</label>
+          <div class="iw">
+            <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <input type="password" id="r-pw" class="field" placeholder="Min. 6 karakter"/>
+          </div>
+        </div>
+        <div style="margin-bottom:24px">
+          <label class="lbl">Konfirmasi Password</label>
+          <div class="iw">
+            <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <input type="password" id="r-pw2" class="field" placeholder="Ulangi password"/>
+          </div>
+        </div>
+        <button class="btn-p" id="btn-r" onclick="doReg()"><span id="r-txt">Buat Akun Baru →</span></button>
+      </div>
+
+      <div class="hr"></div>
+      <p style="text-align:center;font-size:11px;color:var(--muted)">🔒 Data kamu dienkripsi dan disimpan dengan aman</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!--  PAGE: DASHBOARD (hidden until login)  -->
+<!-- ══════════════════════════════════════ -->
+<div id="page-dash" class="page page-hidden" style="overflow:hidden">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo-sm">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M3 15C3 15 3 9 12 9C21 9 21 15 21 15" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M12 9V3M12 3L9 6M12 3L15 6" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="12" cy="18" r="2.5" fill="white"/>
+      </svg>
+    </div>
+    <span style="font-size:15px;font-weight:700;color:white">VaultDrive</span>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--card);border:1px solid var(--border);border-radius:999px">
+        <div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-g));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white" id="u-av">?</div>
+        <span style="font-size:12px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="u-em">—</span>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Keluar
+      </button>
+    </div>
+  </div>
+
+  <!-- BODY (scrollable) -->
+  <div class="dash-body">
+
+    <!-- Stats -->
+    <div class="sec">
+      <div class="sec-title">Ringkasan</div>
+      <div class="stat-row">
+        <div class="stat"><div class="stat-v" id="s-n">0</div><div class="stat-l">Total File</div></div>
+        <div class="stat"><div class="stat-v" id="s-sz">0 B</div><div class="stat-l">Ukuran</div></div>
+        <div class="stat"><div class="stat-v mono" style="font-size:13px;margin-top:4px;color:var(--accent)">my-cloud-files</div><div class="stat-l">Bucket</div></div>
+      </div>
+    </div>
+
+    <!-- Upload -->
+    <div class="sec">
+      <div class="sec-title">Upload File</div>
+      <label class="drop-zone" id="dz">
+        <input type="file" id="fi" multiple onchange="onSel(this.files)"/>
+        <div id="dz-i">
+          <div class="dz-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+            </svg>
+          </div>
+          <div style="font-size:14px;font-weight:600;color:white;margin-bottom:4px">Klik atau seret file ke sini</div>
+          <div style="font-size:12px;color:var(--muted)">Semua jenis file · Multi-file didukung</div>
+        </div>
+        <div id="dz-s" style="display:none">
+          <div class="dz-icon" style="background:rgba(34,197,94,0.1)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div style="font-size:14px;font-weight:600;color:white;margin-bottom:4px" id="dz-fn"></div>
+          <div style="font-size:12px;color:var(--muted)">Siap diupload</div>
+        </div>
+      </label>
+
+      <div id="up-btn-w" style="display:none;text-align:center">
+        <button class="btn-up" id="btn-up" onclick="doUpload(event)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+          <span id="up-txt">Upload Sekarang</span>
+        </button>
+      </div>
+
+      <div id="prog-w" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-top:14px">
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:var(--muted)">Mengupload...</span>
+          <span class="mono" style="color:var(--accent)" id="prog-p">0%</span>
+        </div>
+        <div class="prog-bar-bg"><div class="prog-bar-fill" id="prog-f"></div></div>
+      </div>
+    </div>
+
+    <!-- Files -->
+    <div class="sec" style="padding-bottom:40px">
+      <div class="sec-title">
+        <span>File Saya</span>
+        <span style="font-size:10px;font-weight:600;padding:2px 10px;border-radius:999px;background:rgba(91,106,247,0.12);color:var(--accent);margin-left:4px;text-transform:none;letter-spacing:0" id="f-bdg">0 file</span>
+        <button onclick="loadFiles()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;display:flex;align-items:center;gap:4px;padding:0;font-family:inherit" onmouseover="this.style.color='white'" onmouseout="this.style.color='var(--muted)'">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg> Refresh
+        </button>
+      </div>
+
+      <div id="f-load" style="text-align:center;padding:40px 0">
+        <div class="spin" style="margin:0 auto 10px"></div>
+        <div style="font-size:12px;color:var(--muted)">Memuat file...</div>
+      </div>
+      <div id="f-empty" style="display:none" class="empty-box">
+        <div class="empty-ico">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:white">Belum ada file</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Upload file pertama kamu di atas</div>
+      </div>
+      <div id="f-list" style="display:none;flex-direction:column;gap:8px"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://wahwtjnkgqwmqhnynamr.supabase.co';
+const SUPABASE_KEY = 'EyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhaHd0am5rZ3F3bXFobnluYW1yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1Nzg5OTQsImV4cCI6MjA4OTE1NDk5NH0.0slMaYbnPL0hWTF2LopPJAx_veg-nPrewD4lpKeOc8E';
+const BUCKET = 'my-cloud-files';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let me = null, selFiles = [];
+
+// ─── INIT ────────────────────────────────────
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) goDash(session.user);
+
+  sb.auth.onAuthStateChange((ev, s) => {
+    if (ev === 'SIGNED_IN' && s) goDash(s.user);
+    if (ev === 'SIGNED_OUT')      goAuth();
+  });
+}
+
+function goAuth() {
+  document.getElementById('page-auth').classList.remove('page-hidden');
+  document.getElementById('page-dash').classList.add('page-hidden');
+}
+function goDash(user) {
+  me = user;
+  document.getElementById('u-em').textContent = user.email;
+  document.getElementById('u-av').textContent = user.email.charAt(0).toUpperCase();
+  document.getElementById('page-auth').classList.add('page-hidden');
+  document.getElementById('page-dash').classList.remove('page-hidden');
+  loadFiles();
+}
+
+// ─── TABS ────────────────────────────────────
+function switchTab(t) {
+  const isL = t === 'l';
+  g('form-l').style.display = isL ? '' : 'none';
+  g('form-r').style.display = isL ? 'none' : '';
+  g('tab-l').className = 'tab ' + (isL ? 'on' : '');
+  g('tab-r').className = 'tab ' + (isL ? '' : 'on');
+}
+
+// ─── AUTH ────────────────────────────────────
+async function doLogin() {
+  const em = g('l-em').value.trim(), pw = g('l-pw').value;
+  if (!em || !pw) return toast('Isi email dan password!', 'e');
+  busy('btn-l','l-txt',true,'Masuk...');
+  const { error } = await sb.auth.signInWithPassword({ email: em, password: pw });
+  busy('btn-l','l-txt',false,'Masuk ke Akun →');
+  if (error) toast('Login gagal: ' + error.message, 'e');
+}
+
+async function doReg() {
+  const em = g('r-em').value.trim(), pw = g('r-pw').value, pw2 = g('r-pw2').value;
+  if (!em || !pw || !pw2) return toast('Semua kolom harus diisi!', 'e');
+  if (pw !== pw2) return toast('Password tidak cocok!', 'e');
+  if (pw.length < 6) return toast('Password minimal 6 karakter!', 'e');
+  busy('btn-r','r-txt',true,'Mendaftar...');
+  const { error } = await sb.auth.signUp({ email: em, password: pw });
+  busy('btn-r','r-txt',false,'Buat Akun Baru →');
+  if (error) toast('Daftar gagal: ' + error.message, 'e');
+  else { toast('Akun dibuat! Cek email untuk konfirmasi 📬', 's'); switchTab('l'); }
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  toast('Berhasil keluar 👋', 'i');
+}
+
+// ─── UPLOAD ──────────────────────────────────
+function onSel(files) {
+  if (!files.length) return;
+  selFiles = Array.from(files);
+  const lbl = selFiles.length === 1 ? selFiles[0].name : `${selFiles.length} file dipilih`;
+  g('dz-fn').textContent = lbl;
+  g('dz-i').style.display = 'none';
+  g('dz-s').style.display = '';
+  g('up-btn-w').style.display = '';
+}
+
+async function doUpload(e) {
+  e.preventDefault(); e.stopPropagation();
+  if (!selFiles.length || !me) return;
+  busy('btn-up','up-txt',true,'Mengupload...');
+  g('prog-w').style.display = '';
+  let ok = 0;
+
+  for (let i = 0; i < selFiles.length; i++) {
+    const f = selFiles[i];
+    const path = `${me.id}/${Date.now()}_${f.name}`;
+    let p = 0;
+    const iv = setInterval(() => { p = Math.min(p + Math.random()*18, 88); setProg(p, i, selFiles.length); }, 120);
+    const { error } = await sb.storage.from(BUCKET).upload(path, f, { upsert: false });
+    clearInterval(iv);
+    if (error) toast(`Gagal: ${f.name} — ${error.message}`, 'e');
+    else { ok++; setProg(100, i+1, selFiles.length); }
+  }
+
+  setTimeout(() => {
+    g('prog-w').style.display = 'none';
+    g('dz-i').style.display = ''; g('dz-s').style.display = 'none'; g('up-btn-w').style.display = 'none';
+    g('fi').value = ''; selFiles = [];
+    busy('btn-up','up-txt',false,'Upload Sekarang');
+    setProg(0,0,1);
+    if (ok > 0) { toast(`${ok} file berhasil diupload 🎉`, 's'); loadFiles(); }
+  }, 700);
+}
+
+function setProg(pct, done, total) {
+  g('prog-p').textContent = total > 1 ? `${Math.round(pct)}% (${done}/${total})` : `${Math.round(pct)}%`;
+  g('prog-f').style.width = pct + '%';
+}
+
+const dz = g('dz');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); onSel(e.dataTransfer.files); });
+
+// ─── FILES ───────────────────────────────────
+async function loadFiles() {
+  if (!me) return;
+  show('f-load'); hide('f-empty'); hide('f-list');
+  const { data, error } = await sb.storage.from(BUCKET).list(me.id, { limit:200, sortBy:{ column:'created_at', order:'desc' } });
+  hide('f-load');
+  if (error) { toast('Gagal muat: ' + error.message, 'e'); return; }
+  const files = (data||[]).filter(f => f.name !== '.emptyFolderPlaceholder');
+  g('s-n').textContent = files.length;
+  g('f-bdg').textContent = `${files.length} file`;
+  g('s-sz').textContent = fmtSz(files.reduce((a,f) => a+(f.metadata?.size||0), 0));
+  if (!files.length) { show('f-empty'); return; }
+
+  const list = g('f-list');
+  list.innerHTML = '';
+  list.style.display = 'flex';
+  files.forEach(f => {
+    const ext = f.name.includes('.') ? f.name.split('.').pop().toUpperCase().slice(0,4) : 'FILE';
+    const sz  = fmtSz(f.metadata?.size||0);
+    const dt  = f.created_at ? new Date(f.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '—';
+    const { data: ud } = sb.storage.from(BUCKET).getPublicUrl(`${me.id}/${f.name}`);
+    const url = ud?.publicUrl || '#';
+    const row = document.createElement('div');
+    row.className = 'frow';
+    row.innerHTML = `
+      <div class="ficon"><span class="fext">${esc(ext)}</span></div>
+      <div style="flex:1;overflow:hidden">
+        <div class="fname">${esc(f.name)}</div>
+        <div class="fmeta">${sz} · ${dt}</div>
+      </div>
+      <div class="factions">
+        <a href="${url}" target="_blank" rel="noopener" class="btn-dl">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Download
+        </a>
+        <button class="btn-del" onclick="delFile('${esc(f.name)}', this)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          Hapus
+        </button>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+async function delFile(name, btn) {
+  if (!confirm(`Hapus "${name}"?`)) return;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  const { error } = await sb.storage.from(BUCKET).remove([`${me.id}/${name}`]);
+  if (error) { toast('Gagal hapus: ' + error.message, 'e'); btn.disabled = false; btn.innerHTML = 'Hapus'; }
+  else { toast('File dihapus 🗑️', 's'); loadFiles(); }
+}
+
+// ─── UTILS ───────────────────────────────────
+function g(id) { return document.getElementById(id); }
+function show(id) { const el = g(id); el.style.removeProperty('display'); if (getComputedStyle(el).display === 'none') el.style.display = 'block'; }
+function hide(id) { g(id).style.display = 'none'; }
+function fmtSz(b) { if (!b) return '0 B'; const k=1024, s=['B','KB','MB','GB'], i=Math.floor(Math.log(b)/Math.log(k)); return (b/Math.pow(k,i)).toFixed(1)+' '+s[i]; }
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function busy(bId, tId, on, txt) {
+  const b = g(bId), t = g(tId); b.disabled = on;
+  t.innerHTML = on ? `<span style="display:flex;align-items:center;justify-content:center;gap:8px"><span class="spin"></span>${txt}</span>` : txt;
+}
+let tt;
+function toast(msg, type='i') {
+  const el = g('toast'); el.textContent = msg; el.className = `on ${type}`;
+  clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 3500);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (g('form-l').style.display !== 'none') doLogin();
+  else if (g('form-r').style.display !== 'none') doReg();
+});
+
+init();
+</script>
+</body>
+</html>
